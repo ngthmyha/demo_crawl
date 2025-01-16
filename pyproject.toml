@@ -1,0 +1,30 @@
+[project]
+name = "docker-demo"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Nguyen Thi My Ha",email = "hantm.nta@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "scrapy (>=2.12.0,<3.0.0)",
+    "scrapy-splash (>=0.9.0,<0.10.0)",
+    "six (>=1.17.0,<2.0.0)",
+    "selenium (>=4.27.1,<5.0.0)"
+]
+
+[tool.poetry]
+name = "docker-demo"
+version = "0.1.0"
+description = ""
+authors = ["hantm.nta@gmail.com"]
+
+packages = [
+  { include = "myspider" }
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
