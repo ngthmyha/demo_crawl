@@ -6,6 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from bs4 import BeautifulSoup
 import time
 
 class ExampleSpider(Spider):
@@ -66,14 +67,11 @@ class ExampleSpider(Spider):
         """Nhấn 'Xem tất cả trả lời' để hiển thị hết các trả lời."""
         while True:
             try:
-                # Lấy danh sách các nút "Xem tất cả trả lời"
                 view_all_reply = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.CLASS_NAME, "view_all_reply"))
                 )
-                # Cuộn đến phần tử để đảm bảo nó không bị che khuất
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", view_all_reply)
-                time.sleep(1)  # Đảm bảo phần tử đã được cuộn vào vị trí
-                # Nhấp vào nút
+                time.sleep(1)  
                 view_all_reply.click()
                 time.sleep(2)  
             except Exception as e:
@@ -81,58 +79,54 @@ class ExampleSpider(Spider):
                 break
 
     def extract_comments(self, driver):
-        """Trích xuất dữ liệu bình luận và trả lời."""
         comments = []
         comment_items = driver.find_elements(By.CLASS_NAME, "comment_item")
 
         for item in comment_items:
-            if "sub_comment_item" not in item.get_attribute("class"):
-                try:
-                    # Lấy dữ liệu bình luận chính
-                    nickname = item.find_element(By.CLASS_NAME, "nickname").text
-                    content = item.find_element(By.CLASS_NAME, "full_content").text
-                    likes = item.find_element(By.CSS_SELECTOR, '.reactions-total .number').text or "0"
-                    time_text = item.find_element(By.CLASS_NAME, "time-com").text
+            try:
+                is_reply = "sub_comment_item" in item.get_attribute("class")
+                
+                nickname = item.find_element(By.CLASS_NAME, "nickname").text
+                content_html = item.find_element(By.CLASS_NAME, "full_content").get_attribute('outerHTML')
+                likes = item.find_element(By.CSS_SELECTOR, '.reactions-total .number').text or "0"
+                time_text = item.find_element(By.CLASS_NAME, "time-com").text
 
-                    WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "sub_comment_item"))
-                    )
-                    replies = item.find_elements(By.CLASS_NAME, "sub_comment_item")
-                    comments.append({
-                        "nickname": nickname,
-                        "content": content,
-                        "likes": likes,
-                        "time": time_text,
-                        "is_reply": False,
-                        "reply_nickname": None,
-                        "in_comment": len(replies) > 0,
-                    })
+                # Sử dụng BeautifulSoup để loại bỏ thẻ <span> và <a>
+                soup = BeautifulSoup(content_html, 'html.parser')
+                
+                for span in soup.find_all('span'):
+                    span.decompose()  # Loại bỏ thẻ <span> và nội dung bên trong nó
+                for a in soup.find_all('a'):
+                    a.decompose()  # Loại bỏ thẻ <a> và nội dung bên trong nó
 
-                except Exception as e:
-                    self.logger.warning(f"Error extracting comment: {e}")
-            else:
-                try:
-                    # Lấy dữ liệu bình luận chính
-                    nickname = item.find_element(By.CLASS_NAME, "nickname").text
-                    content = item.find_element(By.CLASS_NAME, "full_content").text
-                    likes = item.find_element(By.CSS_SELECTOR, '.reactions-total .number').text or "0"
-                    time_text = item.find_element(By.CLASS_NAME, "time-com").text
+                content = soup.get_text(separator=' ', strip=True) or ""
 
-                    # Tìm phần tử cha có class="comment-item" từ một phần tử con
+                # Loại bỏ ": " ở đầu câu nếu có
+                content = content.lstrip(": ")
+
+                comment_data = {
+                    "crawler_url": driver.current_url or "",
+                    "nickname": nickname,
+                    "content": content,
+                    "likes": likes,
+                    "time": time_text,
+                    "is_reply": is_reply,
+                    "reply_nickname": None,
+                    "in_comment": None,
+                }
+
+                if is_reply:
                     parent_comment_item = item.find_element(By.XPATH, "./ancestor::div[contains(@class, 'comment_item')]")
-
-                    # Tìm nickname từ phần tử cha
                     outer_nickname = parent_comment_item.find_element(By.CLASS_NAME, "nickname").text
 
-                    comments.append({
-                        "nickname": nickname,
-                        "content": content,
-                        "likes": likes,
-                        "time": time_text,
-                        "is_reply": True,
-                        "reply_nickname": outer_nickname,
-                        "in_comment": True,
-                    })
-                except Exception as e:
-                    self.logger.warning(f"Error extracting comment: {e}")
+                    reply_name = item.find_element(By.CLASS_NAME, "reply_name").text or outer_nickname
+
+                    comment_data["reply_nickname"] = reply_name
+                    comment_data["in_comment"] = outer_nickname
+
+                comments.append(comment_data)
+
+            except Exception as e:
+                self.logger.warning(f"Error extracting comment: {e}")
+
         return comments
