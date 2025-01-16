@@ -1,46 +1,80 @@
+# Use x86 Ubuntu base image for compatibility
 FROM ubuntu:24.04
 
-# Cập nhật hệ thống và cài đặt các công cụ cần thiết
+# Update the system and install necessary tools and dependencies
 RUN apt-get update && apt-get install -y \
     software-properties-common \
-    curl \
     wget \
+    gnupg \
+    curl \
+    unzip \
+    chromium-browser \
     build-essential \
     python3-pip \
-    && apt-get clean
+    python3-dev \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxrandr2 \
+    libxdamage1 \
+    libgbm1 \
+    libasound2-data \
+    libpangocairo-1.0-0 \
+    libpangoft2-1.0-0 \
+    fonts-liberation \
+    libxcursor1 \
+    xdg-utils \
+    ca-certificates \
+    libappindicator3-1 \
+    libdbusmenu-glib4 \
+    libdbusmenu-gtk3-4 \
+    libatk1.0-0 \
+    libgtk-3-0 \
+    libnspr4 \
+    libxss1 \
+    libxtst6 \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
 
-# Thêm repository Deadsnakes để cài đặt các phiên bản Python mới hơn
-RUN add-apt-repository ppa:deadsnakes/ppa
-RUN apt-get update
+# # Add the Google Chrome repository for x86 compatibility
+# RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+#     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+#     && apt-get update \
+#     && apt-get install -y google-chrome-stable
 
-# Cài đặt các phiên bản Python 3.8, 3.9, 3.10 và cài đặt distutils
-RUN apt-get install -y \
-    python3.8 python3.8-distutils \
-    python3.9 python3.9-distutils \
-    python3.10 python3.10-distutils \
-    python3.11 python3.11-distutils
+# Install ChromeDriver
+RUN wget https://storage.googleapis.com/chrome-for-testing-public/132.0.6834.83/linux64/chromedriver-linux64.zip \
+    && unzip -o chromedriver-linux64.zip \
+    && mv chromedriver-linux64/chromedriver /usr/local/bin/ \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm -rf chromedriver-linux64.zip chromedriver-linux64
 
-# Đặt Python 3.12 làm mặc định (tùy chỉnh theo nhu cầu của bạn)
+# Add the Deadsnakes repository for newer Python versions
+RUN add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update
+
+# Set Python 3 as the default
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-# Sao chép file hellowork.py từ máy tính vào container
-COPY hellowork.py /hellowork.py
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 - \
+    && ln -s /root/.local/bin/poetry /usr/local/bin/poetry
 
-# Cài đặt pip cho tất cả các phiên bản Python
-# RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py \
-#     && python3.8 get-pip.py \
-#     && python3.9 get-pip.py \
-#     && python3.10 get-pip.py \
-#     && python3.11 get-pip.py \
-#     && python3.12 get-pip.py \
-#     && rm get-pip.py
+# Copy project files
+WORKDIR /app
+COPY . /app
 
-# Kiểm tra cài đặt các phiên bản Python
-RUN python3.8 --version && python3.9 --version && python3.10 --version && python3.11 --version && python3 --version
+# Initialize Poetry if pyproject.toml does not exist
+RUN [ ! -f "pyproject.toml" ] && poetry init -n || true
 
-# Lệnh mặc định khi container khởi động
-CMD python3.8 /hellowork.py && \
-    python3.9 /hellowork.py && \
-    python3.10 /hellowork.py && \
-    python3.11 /hellowork.py && \
-    python3 /hellowork.py
+# Copy dependency management files
+COPY pyproject.toml poetry.lock /app/
+
+WORKDIR /app/myspider
+
+# Install dependencies using Poetry
+RUN poetry add six selenium scrapy scrapy-selenium scrapy-splash webdriver_manager beautifulsoup4 pymysql
+
+# Use xvfb to enable GUI-less browser execution
+ENV DISPLAY=:99

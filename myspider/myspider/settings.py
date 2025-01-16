@@ -12,7 +12,6 @@ BOT_NAME = "myspider"
 SPIDER_MODULES = ["myspider.spiders"]
 NEWSPIDER_MODULE = "myspider.spiders"
 
-
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = "myspider (+http://www.yourdomain.com)"
 
@@ -63,9 +62,9 @@ DOWNLOADER_MIDDLEWARES = {
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    "myspider.pipelines.MyspiderPipeline": 300,
-#}
+ITEM_PIPELINES = {
+   "myspider.pipelines.MyspiderPipeline": 300,
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
@@ -91,4 +90,10 @@ DOWNLOADER_MIDDLEWARES = {
 # Set settings whose default value is deprecated to a future-proof value
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
-SELENIUM_DRIVER_ARGUMENTS = ['--disable-dev-shm-usage', '--no-sandbox', '--disable-gpu']
+
+# MySQL database connection details
+MYSQL_HOST = 'docker_demo-mysqlcontainer-1'
+MYSQL_DATABASE = 'demo_crawl'
+MYSQL_USER = 'root'
+MYSQL_PASSWORD = '12345678'
+MYSQL_PORT = 3336
