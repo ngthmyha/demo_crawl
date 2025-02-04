@@ -14,9 +14,6 @@ from datetime import datetime
 class ExampleSpider(Spider):
     name = "example"
     allowed_domains = ["vnexpress.net"]
-    start_urls = [
-        'https://vnexpress.net/cong-an-tim-kiem-be-3-tuoi-bi-nguoi-la-dan-khoi-truong-mam-non-4839035.html'
-    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -35,22 +32,17 @@ class ExampleSpider(Spider):
 
         # Initialize database connection
         self.db = pymysql.connect(
-            host="mysqlcontainer",  # This is the service name from docker-compose.yml
-            user="root",             # MySQL username
-            password="12345678",     # MySQL password
-            database="demo_crawl"    # The database you defined
+            host="mysqlcontainer",
+            user="root",      
+            password="12345678",   
+            database="demo_crawl"   
         )
         self.cursor = self.db.cursor()
 
-        for url in self.start_urls:
-            self.cursor.execute(
-                """
-                INSERT INTO crawler_pages (url, access_status)
-                VALUES (%s, %s)
-                ON DUPLICATE KEY UPDATE access_status=%s
-                """,
-                (url, 0, 0)
-            )
+        self.cursor.execute("SELECT url FROM crawler_pages WHERE access_status = 0") 
+        self.start_urls = [row[0] for row in self.cursor.fetchall()]
+        if not self.start_urls:
+            print("Không có URL nào để crawl.")
 
     def parse(self, response):
         self.driver.get(response.url)
@@ -58,11 +50,11 @@ class ExampleSpider(Spider):
 
         self.cursor.execute(
             """
-            INSERT INTO crawler_pages (url, access_status)
-            VALUES (%s, %s)
-            ON DUPLICATE KEY UPDATE access_status=%s
+            UPDATE crawler_pages 
+            SET access_status = 1
+            WHERE url = %s
             """,
-            (response.url, 1, 1)
+            (response.url,)
         )
 
         try:
@@ -84,11 +76,11 @@ class ExampleSpider(Spider):
         except Exception as e:
             self.cursor.execute(
                 """
-                INSERT INTO crawler_pages (url, access_status)
-                VALUES (%s, %s)
-                ON DUPLICATE KEY UPDATE access_status=%s
+                UPDATE crawler_pages 
+                SET access_status = 3
+                WHERE url = %s
                 """,
-                (response.url, 3, 3)  # Đặt access_status = 0 cho URL đã tồn tại
+                (response.url,)
             )
 
             self.logger.error("Không tìm thấy phần bình luận: %s", e)
@@ -129,11 +121,8 @@ class ExampleSpider(Spider):
 
         for item in comment_items:
             try:
-                is_reply = "sub_comment_item" in item.get_attribute("class")
-                
                 nickname = item.find_element(By.CLASS_NAME, "nickname").text
                 content_html = item.find_element(By.CLASS_NAME, "full_content").get_attribute('outerHTML')
-                likes = item.find_element(By.CSS_SELECTOR, '.reactions-total .number').text or "0"
                 time_text = item.find_element(By.CLASS_NAME, "time-com").text
 
                 soup = BeautifulSoup(content_html, 'html.parser')
@@ -151,21 +140,8 @@ class ExampleSpider(Spider):
                     "crawler_url": driver.current_url or "",
                     "nickname": nickname,
                     "content": content,
-                    "likes": likes,
                     "time": time_text,
-                    "is_reply": is_reply,
-                    "reply_nickname": None,
-                    "in_comment": None,
                 }
-
-                # if is_reply:
-                #     parent_comment_item = item.find_element(By.XPATH, "./ancestor::div[contains(@class, 'comment_item')]")
-                #     outer_nickname = parent_comment_item.find_element(By.CLASS_NAME, "nickname").text
-
-                #     reply_name = item.find_element(By.CLASS_NAME, "reply_name").text or outer_nickname
-
-                #     comment_data["reply_nickname"] = reply_name
-                #     comment_data["in_comment"] = outer_nickname
 
                 comments.append(comment_data)
 
@@ -187,11 +163,11 @@ class ExampleSpider(Spider):
             # Insert crawler result
             self.cursor.execute(
                 """
-                INSERT INTO crawler_pages (url, access_status)
-                VALUES (%s, %s)
-                ON DUPLICATE KEY UPDATE access_status=%s
+                UPDATE crawler_pages 
+                SET access_status = 2
+                WHERE url = %s
                 """,
-                (crawler_url, 2, 2)
+                (crawler_url,)
             )
             # Insert user comments
             for comment in comments:
